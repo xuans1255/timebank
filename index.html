@@ -3,79 +3,135 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>时间罐</title>
+<title>时间储蓄罐（精准版）</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#f5f5f5;text-align:center;padding:40px 20px;font-family:sans-serif}
-.time{font-size:46px;margin:30px 0}
-.btn-group{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:10px 0}
-button{padding:12px 14px;border:none;border-radius:10px;background:#4285F4;color:white;font-size:15px}
+body{background:#f5f5f5;text-align:center;padding:40px 20px;font-family:system-ui,sans-serif}
+.time{font-size:52px;margin:30px 0;color:#222;font-weight:500}
+.btn-group{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+button{padding:14px 18px;font-size:16px;border:none;border-radius:12px;background:#4a6cf3;color:white;cursor:pointer}
+button:active{opacity:.8}
 .red{background:#f44336}
 .gray{background:#666}
 .green{background:#2ecc71}
-input{width:60px;padding:8px;text-align:center;border:1px solid #ddd;border-radius:8px}
-.manual{margin:20px 0;display:flex;justify-content:center;gap:6px;align-items:center}
+input{width:70px;padding:12px;font-size:16px;text-align:center;border:1px solid #ccc;border-radius:8px;margin:0 4px}
+.manual{margin:20px 0;display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:wrap}
+.status{font-size:14px;color:#666;margin-top:10px}
 </style>
 </head>
 <body>
 <div class="time" id="show">00:00:00</div>
+<div class="status" id="status">已暂停</div>
 
 <div class="btn-group">
-<button onclick="startAdd()">➕ 累计</button>
-<button onclick="startCut()">➖ 消耗</button>
-<button class="gray" onclick="pause()">⏸ 暂停</button>
-<button class="red" onclick="reset()">清零</button>
+  <button onclick="start(1)">➕ 累计时间</button>
+  <button onclick="start(-1)">➖ 消耗时间</button>
+  <button class="gray" onclick="pause()">⏸ 暂停</button>
+  <button class="red" onclick="reset()">🔄 清零</button>
 </div>
 
 <div class="manual">
-<input type="number" id="h" value="0" min="0">时
-<input type="number" id="m" value="0" min="0">分
-<input type="number" id="s" value="0" min="0">秒
+  <input type="number" id="h" value="0" min="0" placeholder="时">
+  <input type="number" id="m" value="0" min="0" placeholder="分">
+  <input type="number" id="s" value="0" min="0" placeholder="秒">
 </div>
 
 <div class="btn-group">
-<button class="green" onclick="addManual()">手动加时间</button>
-<button class="red" onclick="cutManual()">手动减时间</button>
+  <button class="green" onclick="addManual()">✅ 手动增加</button>
+  <button class="red" onclick="subManual()">❌ 手动减少</button>
 </div>
 
 <script>
-let totalSec = +localStorage.getItem('totalSec')||0
-let timer=null
+// 全局状态（存在localStorage）
+let state = JSON.parse(localStorage.getItem('timebank')) || {
+  total: 0,        // 总秒数
+  running: false,  // 是否运行中
+  dir: 1,          // 方向：1累计 / -1消耗
+  startAt: 0       // 本次开始的时间戳（毫秒）
+};
 
-function fmt(s){
-  h=String(Math.floor(s/3600)).padStart(2,'0')
-  m=String(Math.floor((s%3600)/60)).padStart(2,'0')
-  sc=String(s%60).padStart(2,'0')
-  return h+':'+m+':'+sc
+// 格式化时间
+function fmt(s) {
+  const h = String(Math.floor(s / 3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const sec = String(s%60).padStart(2,'0');
+  return `${h}:${m}:${sec}`;
 }
 
-function render(){
-  document.getElementById('show').innerText=fmt(totalSec)
-  localStorage.setItem('totalSec',totalSec)
+// 计算当前真实秒数（核心！）
+function calc() {
+  if (!state.running) return state.total;
+  const now = Date.now();
+  const delta = Math.floor((now - state.startAt) / 1000); // 后台流逝秒数
+  let curr = state.total + state.dir * delta;
+  return Math.max(0, curr); // 不允许负数
 }
 
-function startAdd(){clearInterval(timer);timer=setInterval(()=>{totalSec++;render()},1000)}
-function startCut(){clearInterval(timer);timer=setInterval(()=>{totalSec>0&&totalSec--;render()},1000)}
-function pause(){clearInterval(timer)}
-function reset(){clearInterval(timer);totalSec=0;render()}
-
-function addManual(){
-  let h=+document.getElementById('h').value
-  let m=+document.getElementById('m').value
-  let s=+document.getElementById('s').value
-  totalSec+=h*3600+m*60+s
-  render()
-}
-function cutManual(){
-  let h=+document.getElementById('h').value
-  let m=+document.getElementById('m').value
-  let s=+document.getElementById('s').value
-  let sub=h*3600+m*60+s
-  totalSec=Math.max(0,totalSec-sub)
-  render()
+// 渲染界面
+function render() {
+  const curr = calc();
+  document.getElementById('show').innerText = fmt(curr);
+  document.getElementById('status').innerText = state.running
+    ? (state.dir === 1 ? '▶ 累计中' : '▶ 消耗中')
+    : '⏸ 已暂停';
+  localStorage.setItem('timebank', JSON.stringify(state));
 }
 
-render()
+// 开始运行（dir=1累计，-1消耗）
+function start(dir) {
+  if (state.running) return;
+  state.total = calc(); // 先校准当前值
+  state.running = true;
+  state.dir = dir;
+  state.startAt = Date.now();
+  render();
+}
+
+// 暂停
+function pause() {
+  if (!state.running) return;
+  state.total = calc(); // 暂停时保存精准值
+  state.running = false;
+  render();
+}
+
+// 清零
+function reset() {
+  pause();
+  state.total = 0;
+  render();
+}
+
+// 手动增加
+function addManual() {
+  const h = +document.getElementById('h').value || 0;
+  const m = +document.getElementById('m').value || 0;
+  const s = +document.getElementById('s').value || 0;
+  state.total = calc() + h*3600 + m*60 + s;
+  render();
+}
+
+// 手动减少
+function subManual() {
+  const h = +document.getElementById('h').value || 0;
+  const m = +document.getElementById('m').value || 0;
+  const s = +document.getElementById('s').value || 0;
+  state.total = Math.max(0, calc() - (h*3600 + m*60 + s));
+  render();
+}
+
+// 页面切回来/解锁时强制刷新（关键）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    render(); // 瞬间校准
+  }
+});
+
+// 前台每秒刷新显示（不影响计时逻辑）
+setInterval(render, 1000);
+
+// 初始化
+render();
 </script>
 </body>
 </html>
