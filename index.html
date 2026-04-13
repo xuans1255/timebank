@@ -42,7 +42,9 @@
 </div>
 
 <script>
-// 持久化存储结构
+// 已经填好你从 Discord 拿到的铃声
+const alertSound = new Audio("https://cdn.discordapp.com/attachments/1493093621476495372/1493095241119436880/EXO_-_.mp3?ex=69ddb8cd&is=69dc674d&hm=d54c4df6a7e9c20aa8cf2da36d119e2ba14e12502b4574f32f01e75bc07ae6bc&");
+
 let store = JSON.parse(localStorage.getItem('time_store')) || {
   total: 0,
   running: false,
@@ -50,7 +52,6 @@ let store = JSON.parse(localStorage.getItem('time_store')) || {
   start: 0
 };
 
-// 格式化时分秒
 function fmt(s) {
   const h = String(Math.floor(s / 3600)).padStart(2, '0');
   const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
@@ -58,24 +59,33 @@ function fmt(s) {
   return `${h}:${m}:${sec}`;
 }
 
-// 计算当前真实时间（核心：不依赖定时器累加）
 function getCurrent() {
   if (!store.running) return store.total;
   const diff = Math.floor((Date.now() - store.start) / 1000);
   return Math.max(0, store.total + store.dir * diff);
 }
 
-// 刷新显示
+function playAlert() {
+  alertSound.currentTime = 0;
+  alertSound.play().catch(() => {});
+}
+
 function updateUI() {
   const now = getCurrent();
   document.getElementById('clock').innerText = fmt(now);
   document.getElementById('state').innerText = store.running
     ? (store.dir === 1 ? '累计中…' : '消耗中…')
     : '已暂停';
+
+  // 只有消耗到 0 才响铃
+  if (now === 0 && store.running && store.dir === -1) {
+    doPause();
+    playAlert();
+  }
+
   localStorage.setItem('time_store', JSON.stringify(store));
 }
 
-// 开始累计
 function startAdd() {
   store.total = getCurrent();
   store.running = true;
@@ -84,56 +94,48 @@ function startAdd() {
   updateUI();
 }
 
-// 开始消耗
 function startSub() {
   store.total = getCurrent();
+  if (store.total <= 0) return;
   store.running = true;
   store.dir = -1;
   store.start = Date.now();
   updateUI();
 }
 
-// 暂停
 function doPause() {
   store.total = getCurrent();
   store.running = false;
   updateUI();
 }
 
-// 清零
 function doReset() {
   doPause();
   store.total = 0;
   updateUI();
 }
 
-// 手动加时
 function addManual() {
-  const h = parseInt(document.getElementById('h').value) || 0;
-  const m = parseInt(document.getElementById('m').value) || 0;
-  const s = parseInt(document.getElementById('s').value) || 0;
-  store.total = getCurrent() + h * 3600 + m * 60 + s;
+  const h = +document.getElementById('h').value || 0;
+  const m = +document.getElementById('m').value || 0;
+  const s = +document.getElementById('s').value || 0;
+  store.total = getCurrent() + h*3600 + m*60 + s;
   updateUI();
 }
 
-// 手动减时
 function subManual() {
-  const h = parseInt(document.getElementById('h').value) || 0;
-  const m = parseInt(document.getElementById('m').value) || 0;
-  const s = parseInt(document.getElementById('s').value) || 0;
-  store.total = Math.max(0, getCurrent() - (h * 3600 + m * 60 + s));
+  const h = +document.getElementById('h').value || 0;
+  const m = +document.getElementById('m').value || 0;
+  const s = +document.getElementById('s').value || 0;
+  store.total = Math.max(0, getCurrent() - (h*3600 + m*60 + s));
   updateUI();
 }
 
-// 切回页面立刻校准（关键）
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') updateUI();
 });
 
-// 前台每秒刷新显示
 setInterval(updateUI, 1000);
-
-// 初始化
 updateUI();
 </script>
 </body>
